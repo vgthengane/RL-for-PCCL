@@ -47,3 +47,20 @@ while preserving other CLI options you provide.
 
 Those steps will let you confirm whether the KL-based forgetting law carries
 over to your point-cloud scenario before integrating more complex RL pipelines.
+
+## Continual LwF (PointNet ModelNet)
+
+`train_lwf.py` now reuses PointNet’s official `ModelNetDataset`. It expects a
+ModelNet40 directory with the `train.txt`, `test.txt`, and `.ply` files that the
+PointNet utilities use (you can follow the instructions in `PointNet/utils/` to
+prepare those data). Point the script to that directory with
+
+```bash
+./train_lwf.sh --modelnet-root /path/to/modelnet40
+```
+
+The script still performs 10 tasks (4 classes per task) with LwF/KD following
+PyCIL’s schedule, and you can pass additional PyTorch CLI args via the wrapper
+thanks to the `PYTHON`/`train_lwf.sh` launcher. If you want to override `batch`
+size, learning rate, or epochs, edit the constants at the top of `train_lwf.py`
+or extend the argument parser as needed.
