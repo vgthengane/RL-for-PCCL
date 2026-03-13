@@ -10,6 +10,24 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import numpy as np
 
+
+import datetime
+import logging
+import time
+import importlib
+import shutil
+import argparse
+
+from pathlib import Path
+from tqdm import tqdm
+from pointnet.data_utils.ModelNetDataLoader import ModelNetDataLoader
+from pointnet import provider
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = BASE_DIR
+sys.path.append(os.path.join(ROOT_DIR, 'models'))
+
+
 def setup_distributed(args):
     args.distributed = False
 
@@ -41,21 +59,7 @@ def all_reduce_tensor(tensor, op=dist.ReduceOp.SUM):
     return tensor
 
 
-import datetime
-import logging
-import time
-import provider
-import importlib
-import shutil
-import argparse
 
-from pathlib import Path
-from tqdm import tqdm
-from data_utils.ModelNetDataLoader import ModelNetDataLoader
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = BASE_DIR
-sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
 def parse_args():
     '''PARAMETERS'''
@@ -77,6 +81,8 @@ def parse_args():
     parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
     parser.add_argument('--data_path', type=str, default='', required=True, help='data path')
     parser.add_argument('--save_freq', type=int, default=10, help='save frequency')
+    parser.add_argument('--tasks_order', type=list, default=[], help='tasks order')
+    parser.add_argument('--distributed', action='store_true', default=False, help='distributed training')
     return parser.parse_args()
 
 
@@ -86,7 +92,7 @@ def inplace_relu(m):
         m.inplace=True
 
 
-def test(model, loader, num_class=40, device=None):
+def test(args, model, loader, num_class=40, device=None):
     classifier = model.eval()
     if device is None:
         device = torch.device("cpu") if args.use_cpu else torch.device("cuda")
@@ -315,12 +321,13 @@ def main(args):
         if args.distributed:
             all_reduce_tensor(total_correct)
             all_reduce_tensor(total_seen)
+            
         train_instance_acc = (total_correct / total_seen.clamp(min=1)).item()
         log_string('Train Instance Accuracy: %f' % train_instance_acc)
 
         if epoch % args.save_freq == 0:
             with torch.no_grad():
-                instance_acc, class_acc = test(classifier.eval(), testDataLoader, num_class=num_class, device=device)
+                instance_acc, class_acc = test(args, classifier.eval(), testDataLoader, num_class=num_class, device=device)
 
                 if (instance_acc >= best_instance_acc):
                     best_instance_acc = instance_acc
